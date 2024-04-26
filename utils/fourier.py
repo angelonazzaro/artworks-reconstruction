@@ -45,3 +45,29 @@ def apply_band_pass_filter(ft, lower_threshold, upper_threshold):
     ft = apply_low_pass_filter(ft, upper_threshold + w)
 
     return ft
+
+
+def alpha_edge_detector(input_img):
+    rows, cols, _ = input_img.shape
+    edges = np.zeros((rows, cols), dtype=np.uint8)
+
+    # Create an array to store the offsets for neighboring pixels
+    neighbor_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
+
+    for x in range(rows):
+        for y in range(cols):
+            # Skip if alpha is zero
+            if input_img[x][y][3] == 0:
+                continue
+
+            # Iterate over neighboring pixels
+            for offset_x, offset_y in neighbor_offsets:
+                neighbor_x = x + offset_x
+                neighbor_y = y + offset_y
+
+                # Check if neighbor is out of bounds or has alpha zero
+                if (not (0 <= neighbor_x < rows and 0 <= neighbor_y < cols)
+                        or input_img[neighbor_x][neighbor_y][3] == 0):
+                    edges[x][y] = 1
+                    break
+    return edges

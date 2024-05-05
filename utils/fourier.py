@@ -15,6 +15,7 @@ def calculate_dft(input_signal: np.ndarray) -> np.ndarray:
     This function computes the 2D DFT of the input image using numpy's fft.fft() function.
     The resulting DFT coefficients are shifted to center the low frequencies.
     """
+    assert len(input_signal.shape) == 1
     ft = np.fft.fft(input_signal)
     return np.fft.fftshift(ft)
 
@@ -49,6 +50,7 @@ def calculate_dft2(input_img: np.ndarray) -> np.ndarray:
     This function computes the 2D DFT of the input image using numpy's fft.fft2() function.
     The resulting DFT coefficients are shifted to center the low frequencies.
     """
+    assert len(input_img.shape) == 2
     ft = np.fft.fft2(input_img)
     return np.fft.fftshift(ft)
 
@@ -83,7 +85,7 @@ def plot_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, tit
     plt.plot(np.log(abs(ft)))
     plt.xlabel(xlabel=xlabel)
     plt.ylabel(ylabel=ylabel)
-    plt.title(title=title)
+    plt.title(label=title)
     plt.show()
 
 
@@ -101,7 +103,7 @@ def plot_2d_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, 
     plt.imshow(np.log(abs(ft)))
     plt.xlabel(xlabel=xlabel)
     plt.ylabel(ylabel=ylabel)
-    plt.title(title=title)
+    plt.title(label=title)
     plt.axis("off")
     plt.show()
 

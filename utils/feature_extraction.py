@@ -35,14 +35,14 @@ def compute_gradient_per_channel(input_img: np.ndarray, combine: str = "max") ->
         gx = np.maximum.reduce([gx_r, gx_b, gx_g])
         gy = np.maximum.reduce([gy_r, gy_b, gy_g])
     elif combine == "mean":
-        gx = np.mean([gx_r, gx_b, gx_g])
-        gy = np.mean([gy_r, gy_b, gy_g])
+        gx = np.mean.reduce([gx_r, gx_b, gx_g])
+        gy = np.mean.reduce([gy_r, gy_b, gy_g])
     elif combine == "sum":
-        gx = np.sum([gx_r, gx_b, gx_g])
-        gy = np.sum([gy_r, gy_b, gy_g])
+        gx = np.sum.reduce([gx_r, gx_b, gx_g])
+        gy = np.sum.reduce([gy_r, gy_b, gy_g])
     elif combine == "median":
-        gx = np.median([gx_r, gx_b, gx_g])
-        gy = np.median([gy_r, gy_b, gy_g])
+        gx = np.median.reduce([gx_r, gx_b, gx_g])
+        gy = np.median.reduce([gy_r, gy_b, gy_g])
     else:
         raise ValueError("Invalid combine method. Choose between 'max', 'mean', 'sum', and 'median'.")
 

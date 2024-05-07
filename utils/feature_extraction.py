@@ -35,14 +35,14 @@ def compute_gradient_per_channel(input_img: np.ndarray, combine: str = "max") ->
         gx = np.maximum.reduce([gx_r, gx_b, gx_g])
         gy = np.maximum.reduce([gy_r, gy_b, gy_g])
     elif combine == "mean":
-        gx = np.mean.reduce([gx_r, gx_b, gx_g])
-        gy = np.mean.reduce([gy_r, gy_b, gy_g])
+        gx = np.mean([gx_r, gx_b, gx_g], axis=0)
+        gy = np.mean([gy_r, gy_b, gy_g], axis=0)
     elif combine == "sum":
-        gx = np.sum.reduce([gx_r, gx_b, gx_g])
-        gy = np.sum.reduce([gy_r, gy_b, gy_g])
+        gx = np.sum([gx_r, gx_b, gx_g], axis=0)
+        gy = np.sum([gy_r, gy_b, gy_g], axis=0)
     elif combine == "median":
-        gx = np.median.reduce([gx_r, gx_b, gx_g])
-        gy = np.median.reduce([gy_r, gy_b, gy_g])
+        gx = np.median([gx_r, gx_b, gx_g], axis=0)
+        gy = np.median([gy_r, gy_b, gy_g], axis=0)
     else:
         raise ValueError("Invalid combine method. Choose between 'max', 'mean', 'sum', and 'median'.")
 
@@ -85,9 +85,10 @@ def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, 
     n = N * _n // 100
 
     # Select top 'n' pixels with the largest magnitude values
-    sorted_indices = np.argsort(mag)[::-1]  # Sort indices in descending order
-    top_mags = mag.ravel()[sorted_indices[:n]]
-    top_angles = angles.ravel()[sorted_indices[:n]]
+    # Sort indices in descending order
+    sorted_indices = np.argsort(np.sum(mag, axis=1))[::-1]
+    top_mags = mag[sorted_indices[:n]]
+    top_angles = angles[sorted_indices[:n]]
 
     # Create histogram
     hist, _ = np.histogram(top_angles, bins=bins, range=(0, 180))
@@ -100,3 +101,4 @@ def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, 
         hist /= np.sum(hist)
 
     return hist, top_mags
+

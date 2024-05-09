@@ -33,6 +33,7 @@ def calculate_idft(input_img: np.ndarray) -> np.ndarray:
     This function computes the 1D IDFT of the input image using numpy's fft.ifft() function.
     The input signal is expected to have been shifted to center the low frequencies.
     """
+    assert len(input_img.shape) == 1
     ifft = np.fft.ifftshift(input_img)
     return np.fft.ifft(ifft).real
 
@@ -68,11 +69,13 @@ def calculate_idft2(input_img: np.ndarray) -> np.ndarray:
     This function computes the 2D IDFT of the input image using numpy's fft.ifft2() function.
     The input image is expected to have been shifted to center the low frequencies.
     """
+    assert len(input_img.shape) == 2
     ifft = np.fft.ifftshift(input_img)
     return np.fft.ifft2(ifft).real
 
 
-def plot_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, title: str = None) -> None:
+def plot_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, title: str = None, show: bool = True) \
+        -> None:
     """
     Plots the spectrum of the 1D Fourier Transform.
 
@@ -82,14 +85,20 @@ def plot_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, tit
     This function plots the magnitude spectrum of the 1D Fourier Transform.
     The Fourier coefficients are expected to be shifted to center the low frequencies.
     """
-    plt.plot(np.log(abs(ft)))
+    assert len(ft.shape) == 1
+    # multiplying by 20 and adding 1 to the real part of the complex magnitudes makes it easier
+    # to plot the spectrum
+    plt.plot(np.log(np.abs(ft)))
     plt.xlabel(xlabel=xlabel)
     plt.ylabel(ylabel=ylabel)
     plt.title(label=title)
-    plt.show()
+
+    if show:
+        plt.show()
 
 
-def plot_2d_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, title: str = None) -> None:
+def plot_2d_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, title: str = None, show: bool = True) \
+        -> None:
     """
     Plots the spectrum of the 2D Fourier Transform.
 
@@ -99,13 +108,18 @@ def plot_2d_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, 
     This function plots the magnitude spectrum of the 2D Fourier Transform.
     The Fourier coefficients are expected to be shifted to center the low frequencies.
     """
+    assert len(ft.shape) == 2
     plt.set_cmap("gray")
-    plt.imshow(np.log(abs(ft)))
+    # multiplying by 20 and adding 1 to the real part of the complex magnitudes makes it easier
+    # to plot the spectrum
+    plt.imshow(20 * np.log(np.abs(ft) + 1))
     plt.xlabel(xlabel=xlabel)
     plt.ylabel(ylabel=ylabel)
     plt.title(label=title)
     plt.axis("off")
-    plt.show()
+
+    if show:
+        plt.show()
 
 
 def apply_2d_low_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
@@ -122,6 +136,7 @@ def apply_2d_low_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
     This function applies a low-pass filter to the 2D Fourier Transform coefficients.
     Frequencies beyond the threshold are attenuated, while frequencies within the threshold are preserved.
     """
+    assert len(ft.shape) == 2
     mask = np.zeros(ft.shape, np.uint8)
     rows, cols = ft.shape[0], ft.shape[1]
     crows, ccols = rows // 2, cols // 2
@@ -143,6 +158,7 @@ def apply_2d_high_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
     This function applies a high-pass filter to the 2D Fourier Transform coefficients.
     Frequencies within the threshold are attenuated, while frequencies beyond the threshold are preserved.
     """
+    assert len(ft.shape) == 2
     mask = np.ones(ft.shape, np.uint8)
     rows, cols = ft.shape[0], ft.shape[1]
     crows, ccols = rows // 2, cols // 2
@@ -165,7 +181,7 @@ def apply_2d_band_pass_filter(ft: np.ndarray, lower_threshold: int, upper_thresh
     This function applies a band-pass filter to the 2D Fourier Transform coefficients.
     Frequencies outside the specified range are attenuated, while frequencies within the range are preserved.
     """
-    assert lower_threshold < upper_threshold
+    assert lower_threshold < upper_threshold and len(ft.shape) == 2
     w = (upper_threshold - lower_threshold) // 2
     ft = apply_2d_high_pass_filter(ft, lower_threshold - w)
     ft = apply_2d_low_pass_filter(ft, upper_threshold + w)

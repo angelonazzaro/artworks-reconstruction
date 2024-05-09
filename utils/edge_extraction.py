@@ -21,37 +21,30 @@ def alpha_edge_detector(input_img: np.ndarray) -> np.ndarray:
     and at least one of its neighboring pixels has an alpha value of zero.
     """
 
-    if len(input_img.shape) != 3 or input_img.shape[2] < 4:
-        raise ValueError("Input image must have an alpha channel.")
+    assert len(input_img.shape) == 3 and input_img.shape[2] >= 4
 
-    rows, cols, _ = input_img.shape
-    edges = np.zeros((rows, cols), dtype=np.uint8)
+    edges = np.zeros_like(input_img)
 
-    # Create an array to store the offsets for neighboring pixels
+    # Define the neighbor offsets for 4-connectivity
     neighbor_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
 
-    for x in range(rows):
-        for y in range(cols):
-            # Skip if alpha is zero
-            if input_img[x][y][3] == 0:
-                continue
+    for offset_x, offset_y in neighbor_offsets:
+        # Shift the image array to obtain the neighbor pixels
+        neighbor_x = np.roll(input_img, offset_x, axis=0)
+        neighbor_y = np.roll(input_img, offset_y, axis=1)
 
-            # Iterate over neighboring pixels
-            for offset_x, offset_y in neighbor_offsets:
-                neighbor_x = x + offset_x
-                neighbor_y = y + offset_y
+        # Create a mask to identify pixels with alpha zero in the neighbors
+        mask = (neighbor_x[:, :, 3] == 0) | (neighbor_y[:, :, 3] == 0)
 
-                # Check if neighbor is out of bounds or has alpha zero
-                if (not (0 <= neighbor_x < rows and 0 <= neighbor_y < cols)
-                        or input_img[neighbor_x][neighbor_y][3] == 0):
-                    edges[x][y] = 1
-                    break
+        # Update the interpolation region with pixels satisfying the mask
+        edges[mask] = input_img[mask]
+
     return edges
 
 
-def extract_interpolation_region(input_img: np.ndarray, threshold: int = 5) -> np.ndarray:
+def extract_working_region(input_img: np.ndarray, threshold: int = 5) -> np.ndarray:
     """
-    Extracts the interpolation region around edge pixels in an image.
+    Extracts the working region around edge pixels in an image.
 
     Args:
     - input_img (np.ndarray): Input image as a 3D numpy array (height x width x channels),
@@ -59,7 +52,7 @@ def extract_interpolation_region(input_img: np.ndarray, threshold: int = 5) -> n
     - threshold (int): Threshold distance from edge pixels. Defaults to 5.
 
     Returns:
-    - interpolation_region (np.ndarray): Interpolation region around edge pixels,
+    - working_region (np.ndarray): Interpolation region around edge pixels,
                                          same shape as input_img.
 
     Raises:
@@ -67,43 +60,33 @@ def extract_interpolation_region(input_img: np.ndarray, threshold: int = 5) -> n
 
     The function iterates through each pixel in the input image and identifies edge pixels
     based on the alpha channel. It then extracts pixels within a specified distance from the edge
-    (defined by the threshold) to form the interpolation region.
+    (defined by the threshold) to form the working region.
     """
 
-    if len(input_img.shape) != 3 or input_img.shape[2] < 4:
-        raise ValueError("Input image must have an alpha channel.")
+    assert len(input_img.shape) == 3 and input_img.shape[2] >= 4
 
-    rows, cols, _ = input_img.shape
-    interpolation_region = np.zeros_like(input_img)
+    working_region = np.zeros_like(input_img)
 
+    # Define the neighbor offsets for 4-connectivity
     neighbor_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
 
-    for x in range(rows):
-        for y in range(cols):
-            for offset_x, offset_y in neighbor_offsets:
-                neighbor_x = x + offset_x
-                neighbor_y = y + offset_y
+    for offset_x, offset_y in neighbor_offsets:
+        # Shift the image array to obtain the neighbor pixels
+        neighbor_x = np.roll(input_img, offset_x, axis=0)
+        neighbor_y = np.roll(input_img, offset_y, axis=1)
 
-                # Check if neighbor is out of bounds or has alpha zero and move in the opposite direction
-                if (not (0 <= neighbor_x < rows and 0 <= neighbor_y < cols)
-                        or input_img[neighbor_x][neighbor_y][3] == 0):
+        # Create a mask to identify pixels with alpha zero in the neighbors
+        edge_mask = (neighbor_x[:, :, 3] == 0) | (neighbor_y[:, :, 3] == 0)
+        working_mask = edge_mask.copy()
 
-                    # Add all the valid pixel in [1, threshold] to the interpolation region
-                    for t in range(1, threshold + 1):
-                        if offset_x > 0 or offset_y > 0:
-                            opposite_x = neighbor_x - t if offset_x != 0 else neighbor_x
-                            opposite_y = neighbor_y - t if offset_y != 0 else neighbor_y
-                        else:
-                            opposite_x = neighbor_x + t if offset_x != 0 else neighbor_x
-                            opposite_y = neighbor_y + t if offset_y != 0 else neighbor_y
+        # Expand the mask to include pixels within the threshold distance
+        for t in range(1, threshold + 1):
+            opposite_x = np.roll(edge_mask, -t * offset_x, axis=0)
+            opposite_y = np.roll(edge_mask, -t * offset_y, axis=1)
 
-                        # Check if pixel is out of bounds
-                        if not (0 <= opposite_x < rows and 0 <= opposite_y < cols):
-                            break
+            working_mask = working_mask | (opposite_x | opposite_y)
 
-                        # If inner pixel has content, add it to the interpolation region
-                        if input_img[opposite_x][opposite_y][3] != 0:
-                            interpolation_region[opposite_x][opposite_y] = input_img[opposite_x][opposite_y]
+        working_region[working_mask] = input_img[working_mask]
 
-    return interpolation_region
+    return working_region
 

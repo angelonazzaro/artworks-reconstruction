@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2 as cv
 
 
 def calculate_dft(input_signal: np.ndarray) -> np.ndarray:
@@ -16,6 +17,7 @@ def calculate_dft(input_signal: np.ndarray) -> np.ndarray:
     The resulting DFT coefficients are shifted to center the low frequencies.
     """
     assert len(input_signal.shape) == 1
+
     ft = np.fft.fft(input_signal)
     return np.fft.fftshift(ft)
 
@@ -34,6 +36,7 @@ def calculate_idft(input_img: np.ndarray) -> np.ndarray:
     The input signal is expected to have been shifted to center the low frequencies.
     """
     assert len(input_img.shape) == 1
+
     ifft = np.fft.ifftshift(input_img)
     return np.fft.ifft(ifft).real
 
@@ -52,6 +55,7 @@ def calculate_dft2(input_img: np.ndarray) -> np.ndarray:
     The resulting DFT coefficients are shifted to center the low frequencies.
     """
     assert len(input_img.shape) == 2
+
     ft = np.fft.fft2(input_img)
     return np.fft.fftshift(ft)
 
@@ -70,6 +74,7 @@ def calculate_idft2(input_img: np.ndarray) -> np.ndarray:
     The input image is expected to have been shifted to center the low frequencies.
     """
     assert len(input_img.shape) == 2
+
     ifft = np.fft.ifftshift(input_img)
     return np.fft.ifft2(ifft).real
 
@@ -86,9 +91,10 @@ def plot_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, tit
     The Fourier coefficients are expected to be shifted to center the low frequencies.
     """
     assert len(ft.shape) == 1
-    # multiplying by 20 and adding 1 to the real part of the complex magnitudes makes it easier
+
+    # multiplying by 20 and adding 1 (avoid log(0)) to the real part of the complex magnitudes makes it easier
     # to plot the spectrum
-    plt.plot(np.log(np.abs(ft)))
+    plt.plot(20 * np.log(np.abs(ft) + 1))
     plt.xlabel(xlabel=xlabel)
     plt.ylabel(ylabel=ylabel)
     plt.title(label=title)
@@ -109,10 +115,10 @@ def plot_2d_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, 
     The Fourier coefficients are expected to be shifted to center the low frequencies.
     """
     assert len(ft.shape) == 2
-    plt.set_cmap("gray")
-    # multiplying by 20 and adding 1 to the real part of the complex magnitudes makes it easier
+
+    # multiplying by 20 and adding 1 (avoid log(0)) to the real part of the complex magnitudes makes it easier
     # to plot the spectrum
-    plt.imshow(20 * np.log(np.abs(ft) + 1))
+    plt.imshow(20 * np.log(np.abs(ft) + 1), cmap='gray')
     plt.xlabel(xlabel=xlabel)
     plt.ylabel(ylabel=ylabel)
     plt.title(label=title)
@@ -137,6 +143,7 @@ def apply_2d_low_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
     Frequencies beyond the threshold are attenuated, while frequencies within the threshold are preserved.
     """
     assert len(ft.shape) == 2
+
     mask = np.zeros(ft.shape, np.uint8)
     rows, cols = ft.shape[0], ft.shape[1]
     crows, ccols = rows // 2, cols // 2
@@ -159,6 +166,7 @@ def apply_2d_high_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
     Frequencies within the threshold are attenuated, while frequencies beyond the threshold are preserved.
     """
     assert len(ft.shape) == 2
+
     mask = np.ones(ft.shape, np.uint8)
     rows, cols = ft.shape[0], ft.shape[1]
     crows, ccols = rows // 2, cols // 2
@@ -182,7 +190,22 @@ def apply_2d_band_pass_filter(ft: np.ndarray, lower_threshold: int, upper_thresh
     Frequencies outside the specified range are attenuated, while frequencies within the range are preserved.
     """
     assert lower_threshold < upper_threshold and len(ft.shape) == 2
+
     w = (upper_threshold - lower_threshold) // 2
-    ft = apply_2d_high_pass_filter(ft, lower_threshold - w)
-    ft = apply_2d_low_pass_filter(ft, upper_threshold + w)
-    return ft
+
+    mask = np.zeros(ft.shape, dtype=np.uint8)
+    crows, ccols = ft.shape[0] // 2, ft.shape[1] // 2
+    center = (crows, ccols)
+
+    # Creating upper bandpass mask
+    cv.circle(mask, center, upper_threshold + w, 1, -1)
+    upper_masked_ft = ft * mask
+
+    # Creating lower bandpass mask
+    mask.fill(0)  # Resetting mask
+    cv.circle(mask, center, lower_threshold - w, 1, -1)
+    lower_masked_ft = ft * mask
+
+    # Returning the bandpass filtered spectrum
+    return upper_masked_ft - lower_masked_ft
+

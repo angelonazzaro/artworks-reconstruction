@@ -26,7 +26,7 @@ def compute_image_gradient(input_img: np.ndarray, combine: str = "concat") -> (n
     """
     assert (len(input_img.shape) == 3) and input_img.shape[2] >= 3
     # b, g, r are arbitrary channel names
-    b, g, r = cv.split(input_img if len(input_img.shape[2]) == 3 else input_img[:, :, :3])
+    b, g, r = cv.split(input_img if input_img.shape[2] == 3 else input_img[:, :, :3])
 
     gx_r, gy_r = np.gradient(r)
     gx_g, gy_g = np.gradient(g)

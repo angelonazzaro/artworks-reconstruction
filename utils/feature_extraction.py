@@ -32,27 +32,32 @@ def compute_image_gradient(input_img: np.ndarray, combine: str = "concat") -> (n
     gx_g, gy_g = np.gradient(g)
     gx_b, gy_b = np.gradient(b)
 
+    # by considering both gradient of the grayscale image and the gradients of the RGB channels,
+    # we combine structural information with color information
+    grayscale_image = cv.cvtColor(input_img, cv.COLOR_BGR2GRAY)
+    gx_gray, gy_gray = np.gradient(grayscale_image)
+
     if combine == "concat":
-        return np.array([[gx_r, gx_b, gx_g], [gy_r, gy_b, gy_g]])
+        return np.array([[gx_r, gx_b, gx_g, gx_gray], [gy_r, gy_b, gy_g, gy_gray]])
     elif combine == "max":
-        gx = np.maximum.reduce([gx_r, gx_b, gx_g])
-        gy = np.maximum.reduce([gy_r, gy_b, gy_g])
+        gx = np.maximum.reduce([gx_gray, gx_r, gx_b, gx_g])
+        gy = np.maximum.reduce([gy_gray, gy_r, gy_b, gy_g])
     elif combine == "mean":
-        gx = np.mean([gx_r, gx_b, gx_g], axis=0)
-        gy = np.mean([gy_r, gy_b, gy_g], axis=0)
+        gx = np.mean([gx_gray, gx_r, gx_b, gx_g], axis=0)
+        gy = np.mean([gy_gray, gy_r, gy_b, gy_g], axis=0)
     elif combine == "sum":
-        gx = np.sum([gx_r, gx_b, gx_g], axis=0)
-        gy = np.sum([gy_r, gy_b, gy_g], axis=0)
+        gx = np.sum([gx_gray, gx_r, gx_b, gx_g], axis=0)
+        gy = np.sum([gy_gray, gy_r, gy_b, gy_g], axis=0)
     elif combine == "median":
-        gx = np.median([gx_r, gx_b, gx_g], axis=0)
-        gy = np.median([gy_r, gy_b, gy_g], axis=0)
+        gx = np.median([gx_gray, gx_r, gx_b, gx_g], axis=0)
+        gy = np.median([gy_gray, gy_r, gy_b, gy_g], axis=0)
     else:
         raise ValueError("Invalid combine method. Choose between 'concat', 'max', 'mean', 'sum', and 'median'.")
 
     return gx, gy
 
 
-def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, combine: str = "max",
+def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, combine: str = "concat",
                           normalize: bool = True) -> (np.ndarray, np.ndarray):
     """
     Generate Angular Histogram features from an input image.
@@ -77,7 +82,7 @@ def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, 
     bins = np.arange(0, 180, angle_step)
 
     if len(input_img.shape) > 2:
-        gx, gy = compute_gradient_per_channel(input_img[:, :, :3], combine=combine)
+        gx, gy = compute_image_gradient(input_img[:, :, :3], combine=combine)
     else:
         gx, gy = np.gradient(input_img)
 

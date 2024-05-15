@@ -9,7 +9,8 @@ def extract_working_region(input_img: np.ndarray, threshold: int = 0) -> np.ndar
     Args:
     - input_img (np.ndarray): Input image as a 3D numpy array (height x width x channels),
                               where channels include RGB and alpha.
-    - threshold (int): Threshold distance from edge pixels. If 0, it returns the shape of the fragment.                         Defaults to 0.
+    - threshold (int): Threshold distance from edge pixels. If 0, it returns the shape of the fragment.
+                        Defaults to 0.
 
     Returns:
     - working_region (np.ndarray): Interpolation region around edge pixels,

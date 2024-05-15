@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def compute_image_gradient(input_img: np.ndarray, combine: str = "concat") -> (np.ndarray, np.ndarray):
@@ -109,3 +110,40 @@ def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, 
         hist /= np.sum(hist)
 
     return hist, top_mags
+
+
+def plot_channel_histograms(image: np.ndarray, mask: np.ndarray, title: str = "Histogram"):
+    """
+    Plot histograms for each channel of the input image.
+
+    Args:
+        image (np.ndarray): Input image.
+        mask (np.ndarray): Mask to apply on the image.
+        title (str): Title for the plot (default is "Histogram").
+
+    Returns:
+        None
+    """
+    # Split the image into its respective channels
+    chans = cv.split(image)
+
+    # Define colors for plotting
+    colors = ("b", "g", "r")
+
+    # Create a new figure for plotting
+    plt.figure()
+    plt.title(title)
+    plt.xlabel("Bins")
+    plt.ylabel("# of Pixels")
+    plt.ylim([0, 256])
+
+    # Loop over the image channels
+    for (chan, color) in zip(chans, colors):
+        # Create a histogram for the current channel
+        hist = cv.calcHist([chan], [0], mask, [256], [0, 256])
+
+        # Plot the histogram
+        plt.plot(hist, color=color)
+
+    # Set the x-axis limit
+    plt.xlim([0, 256])

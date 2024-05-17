@@ -3,14 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def compute_image_gradient(input_img: np.ndarray, combine: str = "concat") -> (np.ndarray, np.ndarray):
+def compute_image_gradient(input_img: np.ndarray, combine: str = "max") -> (np.ndarray, np.ndarray):
     """
     Compute gradients for each channel of the input image and combine them based on the specified method.
 
     Args:
         input_img (np.ndarray): Input image as a NumPy array.
         combine (str, optional): Method to combine gradients for each channel.
-                                  - "concat": Return Jacobian of gradient for each channel.
                                   - "max": Take the maximum gradient among all channels.
                                   - "mean": Take the mean gradient among all channels.
                                   - "sum": Sum the gradients across all channels.
@@ -38,24 +37,22 @@ def compute_image_gradient(input_img: np.ndarray, combine: str = "concat") -> (n
     grayscale_image = cv.cvtColor(input_img, cv.COLOR_BGR2GRAY)
     gx_gray, gy_gray = np.gradient(grayscale_image)
 
-    if combine == "concat":
-        return np.array([[gx_r, gx_b, gx_g, gx_gray], [gy_r, gy_b, gy_g, gy_gray]])
-    elif combine == "max":
-        gx = np.maximum.reduce([gx_gray, gx_r, gx_b, gx_g])
-        gy = np.maximum.reduce([gy_gray, gy_r, gy_b, gy_g])
+    if combine == "max":
+        gx = np.maximum.reduce([gx_r, gx_b, gx_g])
+        gy = np.maximum.reduce([gy_r, gy_b, gy_g])
     elif combine == "mean":
-        gx = np.mean([gx_gray, gx_r, gx_b, gx_g], axis=0)
-        gy = np.mean([gy_gray, gy_r, gy_b, gy_g], axis=0)
+        gx = np.mean([gx_r, gx_b, gx_g], axis=0)
+        gy = np.mean([gy_r, gy_b, gy_g], axis=0)
     elif combine == "sum":
-        gx = np.sum([gx_gray, gx_r, gx_b, gx_g], axis=0)
-        gy = np.sum([gy_gray, gy_r, gy_b, gy_g], axis=0)
+        gx = np.sum([gx_r, gx_b, gx_g], axis=0)
+        gy = np.sum([gy_r, gy_b, gy_g], axis=0)
     elif combine == "median":
-        gx = np.median([gx_gray, gx_r, gx_b, gx_g], axis=0)
-        gy = np.median([gy_gray, gy_r, gy_b, gy_g], axis=0)
+        gx = np.median([gx_r, gx_b, gx_g], axis=0)
+        gy = np.median([gy_r, gy_b, gy_g], axis=0)
     else:
         raise ValueError("Invalid combine method. Choose between 'concat', 'max', 'mean', 'sum', and 'median'.")
 
-    return gx, gy
+    return np.array([[gx, gx_gray], [gy, gy_gray]])
 
 
 def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, combine: str = "concat",

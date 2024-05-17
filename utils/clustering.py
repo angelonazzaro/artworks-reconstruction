@@ -12,8 +12,130 @@ from .feature_extraction import compute_image_gradient
 from .edge_extraction import extract_working_region, filter_working_region
 
 
-def reshape_jacobians(jacobian: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, \
-        np.ndarray, np.ndarray, np.ndarray]:
+def precision(reference_image_id: int, cluster_dir: str, ext: str = ".png") -> float:
+    """
+    Calculates precision given a reference image ID and a directory containing images.
+
+    Args:
+        reference_image_id (int): The ID of the reference image.
+        cluster_dir (str): Path to the directory containing images.
+        ext (str, optional): File extension to filter images (default is ".png").
+
+    Returns:
+        float: Precision score (true positives / (true positives + false positives)).
+    """
+    files = os.listdir(cluster_dir)
+    total = len(files)
+    tp = 0
+
+    for image in files:
+        if not image.endswith(ext):
+            continue
+
+        if image.split(".")[1] == str(reference_image_id):
+            tp += 1
+
+    return tp / total
+
+
+def recall(reference_image_id: int, root_dir: str, cluster_dir_exp: str, ext: str = ".png") -> float:
+    """
+    Calculates recall given a reference image ID, root directory, and an excluded cluster directory.
+
+    Args:
+        reference_image_id (int): The ID of the reference image.
+        root_dir (str): Root directory containing subdirectories.
+        cluster_dir_exp (str): Name of the excluded cluster directory.
+        ext (str, optional): File extension to filter images (default is ".png").
+
+    Returns:
+        float: Recall score (true positives / (true positives + false negatives)).
+    """
+    tp = 0
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [d for d in dirnames if d != str(cluster_dir_exp)]
+        for filename in filenames:
+            if not filename.endswith(ext):
+                continue
+            if filename.split(".")[1] == str(reference_image_id):
+                tp += 1
+            total += 1
+
+    return tp / total
+
+
+def f1(precision_score: float, recall_score: float) -> float:
+    """
+    Calculates F1 score given precision and recall.
+
+    Args:
+        precision_score (float): Precision score.
+        recall_score (float): Recall score.
+
+    Returns:
+        float: F1 score.
+    """
+    return 2 * (precision_score * recall_score) / (precision_score + recall_score)
+
+
+def compute_color_histograms(images: list, flatten: bool = True) -> list:
+    """
+    Computes the color histograms for a list of images.
+
+    Args:
+        images (list): List of images to process.
+        flatten (bool): Whether to flatten the histograms. Defaults to True.
+
+    Returns:
+        list: List of histograms for each image.
+    """
+    histograms = []
+    for image in tqdm(images, desc="Computing color histograms"):
+        # Calculate the color histogram for the image
+        hist_src = cv.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+        hist_dst = cv.normalize(hist_src, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX)
+
+        if flatten:
+            hist_dst = hist_dst.flatten()
+
+        histograms.append(hist_dst)
+
+    return histograms
+
+
+def compute_jacobians(images: list, flatten: bool = True) -> list:
+    """
+    Computes the Jacobians for a list of images.
+
+    Args:
+        images (list): List of images to process.
+        flatten (bool): Whether to flatten the Jacobians. Defaults to True.
+
+    Returns:
+        list: List of Jacobians for each image.
+    """
+    max_width = max(image.shape[1] for image in images)
+    max_height = max(image.shape[0] for image in images)
+
+    jacobians = []
+    for image in tqdm(images, desc="Computing Jacobians"):
+        # Resize the image to the maximum dimensions
+        reshaped_image = cv.resize(image, (max_width, max_height))
+        reshaped_image = cv.cvtColor(reshaped_image, cv.COLOR_BGR2HSV)
+
+        # Compute the image gradient (Jacobians)
+        jacobian = compute_image_gradient(reshaped_image)
+
+        if flatten:
+            jacobian = jacobian.flatten()
+
+        jacobians.append(jacobian)
+
+    return jacobians
+
+
+def reshape_jacobians(jacobian: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Reshape the Jacobian arrays.
 
@@ -25,35 +147,24 @@ def reshape_jacobians(jacobian: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.
               np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             Reshaped arrays for gx_r, gx_g, gx_b, gx_gray, gy_r, gy_g, gy_b, gy_gray.
     """
-    gx_r = jacobian[0][0].reshape(1, -1)
-    gx_g = jacobian[0][1].reshape(1, -1)
-    gx_b = jacobian[0][2].reshape(1, -1)
-    gx_gray = jacobian[0][3].reshape(1, -1)
-    gy_r = jacobian[1][0].reshape(1, -1)
-    gy_g = jacobian[1][1].reshape(1, -1)
-    gy_b = jacobian[1][2].reshape(1, -1)
-    gy_gray = jacobian[1][3].reshape(1, -1)
+    gx = jacobian[0][0].reshape(1, -1)
+    gx_gray = jacobian[0][1].reshape(1, -1)
+    gy = jacobian[1][1].reshape(1, -1)
+    gy_gray = jacobian[1][1].reshape(1, -1)
 
-    return gx_r, gx_g, gx_b, gx_gray, gy_r, gy_g, gy_b, gy_gray
+    return gx, gx_gray, gy, gy_gray
 
 
-def compute_color_histogram_dist_matrix(images: np.ndarray):
+def compute_color_histogram_dist_matrix(histograms: list):
     """
        Computes the distance matrix based on color histograms of input images.
 
        Args:
-           images (np.ndarray): Array of input images.
+           histograms (np.ndarray): Array of color histograms.
 
        Returns:
            np.ndarray: Similarity matrix.
     """
-    histograms = []
-    for image in images:
-        # working_region = cv2.cvtColor(working_region, cv.COLOR_BGR2HSV)
-        hist_src = cv.calcHist([image], [0, 1, 2], None, [8, 8, 8],
-                               [0, 256, 0, 256, 0, 256])
-        hist_dst = cv.normalize(hist_src, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX)
-        histograms.append(hist_dst)
 
     # calculate matrix distance
     distance_matrix = np.zeros((len(histograms), len(histograms)))  # Initialize distance matrix
@@ -86,12 +197,12 @@ def compute_color_histogram_dist_matrix(images: np.ndarray):
     return distance_matrix
 
 
-def compute_jacobians_dist_matrix(images: np.ndarray, combine="mean", metric: str = 'euclidean'):
+def compute_jacobians_dist_matrix(jacobians: list, combine="mean", metric: str = 'euclidean'):
     """
         Computes the distance matrix based on image gradients (Jacobians) of input images.
 
         Args:
-            images (np.ndarray): Array of input images.
+            jacobians (np.ndarray): List of image gradient jacobians.
             combine (str): Method to combine distances ('mean' or 'median').
             metric (str): Metric to use for computing pairwise distances.
 
@@ -102,40 +213,22 @@ def compute_jacobians_dist_matrix(images: np.ndarray, combine="mean", metric: st
     if combine not in ['mean', 'median']:
         raise ValueError("combine must be 'mean' or 'median'")
 
-    max_width = max(image.shape[1] for image in images)
-    max_height = max(image.shape[0] for image in images)
-
-    jacobians = []
-    for working_region in images:
-        reshaped_working_region = cv.resize(working_region, (max_width, max_height))
-        reshaped_working_region = cv.cvtColor(reshaped_working_region, cv.COLOR_BGR2HSV)
-        jacobian = compute_image_gradient(reshaped_working_region)
-        jacobians.append(jacobian)
-
-    distance_matrix = np.zeros((len(images), len(images)))
+    distance_matrix = np.zeros((len(jacobians), len(jacobians)))
 
     for i in tqdm(range(len(jacobians)), desc="Calculating similarities"):
-        gx_r, gx_g, gx_b, gx_gray, gy_r, gy_g, gy_b, gy_gray = reshape_jacobians(jacobians[i])
+        gx, gx_gray, gy, gy_gray = reshape_jacobians(jacobians[i])
         for j in range(i + 1, len(jacobians)):
-            gx_r_2, gx_g_2, gx_b_2, gx_gray_2, gy_r_2, gy_g_2, gy_b_2, gy_gray_2 = reshape_jacobians(jacobians[j])
+            gx_2, gx_gray_2, gy_2, gy_gray_2 = reshape_jacobians(jacobians[j])
 
-            dist_gx_r = pairwise_distances(gx_r, gx_r_2, metric=metric)
-            dist_gx_g = pairwise_distances(gx_g, gx_g_2, metric=metric)
-            dist_gx_b = pairwise_distances(gx_b, gx_b_2, metric=metric)
+            dist_gx = pairwise_distances(gx, gx_2, metric=metric)
+            dist_gy = pairwise_distances(gy, gy_2, metric=metric)
             dist_gx_gray = pairwise_distances(gx_gray, gx_gray_2, metric=metric)
-            dist_gy_r = pairwise_distances(gy_r, gy_r_2, metric=metric)
-            dist_gy_g = pairwise_distances(gy_g, gy_g_2, metric=metric)
-            dist_gy_b = pairwise_distances(gy_b, gy_b_2, metric=metric)
             dist_gy_gray = pairwise_distances(gy_gray, gy_gray_2, metric=metric)
 
             if combine == "mean":
-                distance = np.mean(
-                    [dist_gx_r, dist_gx_g, dist_gx_b, dist_gx_gray, dist_gy_b, dist_gy_gray, dist_gy_r, dist_gy_g,
-                     dist_gy_b])
+                distance = np.mean([dist_gx, dist_gy, dist_gx_gray, dist_gy_gray])
             elif combine == "median":
-                distance = np.median(
-                    [dist_gx_r, dist_gx_g, dist_gx_b, dist_gx_gray, dist_gy_b, dist_gy_gray, dist_gy_r, dist_gy_g,
-                     dist_gy_b])
+                distance = np.median([dist_gx, dist_gy, dist_gx_gray, dist_gy_gray])
 
             distance_matrix[i, j] = distance
             distance_matrix[j, i] = distance

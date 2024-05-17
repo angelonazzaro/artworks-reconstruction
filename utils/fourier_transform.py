@@ -128,21 +128,23 @@ def plot_2d_ft_spectrum(ft: np.ndarray, xlabel: str = None, ylabel: str = None, 
         plt.show()
 
 
-def apply_2d_low_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
+def apply_2d_low_pass_filter(ft: np.ndarray) -> np.ndarray:
     """
     Applies a low-pass filter to the Fourier Transform.
 
     Args:
     - ft (np.ndarray): 2D Fourier Transform coefficients.
-    - threshold (int): Threshold value for the filter.
 
     Returns:
     - filtered_ft (np.ndarray): Filtered Fourier Transform coefficients.
 
     This function applies a low-pass filter to the 2D Fourier Transform coefficients.
     Frequencies beyond the threshold are attenuated, while frequencies within the threshold are preserved.
+    The threshold is calculated based on the spectrum's shape.
     """
     assert len(ft.shape) == 2
+
+    threshold = ft.shape[1] // 5
 
     mask = np.zeros(ft.shape, np.uint8)
     rows, cols = ft.shape[0], ft.shape[1]
@@ -151,21 +153,23 @@ def apply_2d_low_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
     return ft * mask
 
 
-def apply_2d_high_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
+def apply_2d_high_pass_filter(ft: np.ndarray) -> np.ndarray:
     """
     Applies a high-pass filter to the Fourier Transform.
 
     Args:
     - ft (np.ndarray): 2D Fourier Transform coefficients.
-    - threshold (int): Threshold value for the filter.
 
     Returns:
     - filtered_ft (np.ndarray): Filtered Fourier Transform coefficients.
 
     This function applies a high-pass filter to the 2D Fourier Transform coefficients.
     Frequencies within the threshold are attenuated, while frequencies beyond the threshold are preserved.
+    The threshold is calculated based on the spectrum's shape.
     """
     assert len(ft.shape) == 2
+
+    threshold = ft.shape[1] // 5
 
     mask = np.ones(ft.shape, np.uint8)
     rows, cols = ft.shape[0], ft.shape[1]
@@ -174,27 +178,30 @@ def apply_2d_high_pass_filter(ft: np.ndarray, threshold: int) -> np.ndarray:
     return ft * mask
 
 
-def apply_2d_band_pass_filter(ft: np.ndarray, lower_threshold: int, upper_threshold: int) -> np.ndarray:
+def apply_2d_band_pass_filter(ft: np.ndarray) -> np.ndarray:
     """
     Applies a band-pass filter to the Fourier Transform.
 
     Args:
     - ft (np.ndarray): 2D Fourier Transform coefficients.
-    - lower_threshold (int): Lower frequency threshold for the filter.
-    - upper_threshold (int): Upper frequency threshold for the filter.
 
     Returns:
     - filtered_ft (np.ndarray): Filtered Fourier Transform coefficients.
 
     This function applies a band-pass filter to the 2D Fourier Transform coefficients.
     Frequencies outside the specified range are attenuated, while frequencies within the range are preserved.
+    The lower_threshold is calculated based on the spectrum's shape.
+    The upper_threshold is calculated based on the lower_threshold.
     """
-    assert lower_threshold < upper_threshold and len(ft.shape) == 2
+    assert len(ft.shape) == 2
+
+    lower_threshold = ft.shape[1] // 5
+    upper_threshold = lower_threshold + (lower_threshold // 2)
 
     w = (upper_threshold - lower_threshold) // 2
 
     mask = np.zeros(ft.shape, dtype=np.uint8)
-    crows, ccols = ft.shape[0] // 2, ft.shape[1] // 2
+    crows, ccols = ft.shape[1] // 2, ft.shape[0] // 2
     center = (crows, ccols)
 
     # Creating upper bandpass mask

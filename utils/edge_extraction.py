@@ -1,4 +1,5 @@
 import numpy as np
+import cv2 as cv
 
 
 def extract_working_region(input_img: np.ndarray, threshold: int = 0) -> np.ndarray:
@@ -8,7 +9,8 @@ def extract_working_region(input_img: np.ndarray, threshold: int = 0) -> np.ndar
     Args:
     - input_img (np.ndarray): Input image as a 3D numpy array (height x width x channels),
                               where channels include RGB and alpha.
-    - threshold (int): Threshold distance from edge pixels. If 0, it returns the shape of the fragment.                         Defaults to 0.
+    - threshold (int): Threshold distance from edge pixels. If 0, it returns the shape of the fragment.
+                        Defaults to 0.
 
     Returns:
     - working_region (np.ndarray): Interpolation region around edge pixels,
@@ -53,3 +55,38 @@ def extract_working_region(input_img: np.ndarray, threshold: int = 0) -> np.ndar
             working_region[working_mask] = input_img[working_mask]
 
     return working_region
+
+
+def filter_working_region(input_img: np.ndarray) -> np.ndarray:
+    """
+    Filters the working region of an image by removing pixels with alpha channel value of 0.
+
+    Parameters:
+       input_img (numpy.ndarray): The input image with an alpha channel.
+
+    Returns:
+       numpy.ndarray: The filtered image with only non-transparent pixels.
+    """
+    # Extract pixels with alpha channel value different from 0
+    valid_pixels = input_img[input_img[:, :, 3] != 0]
+
+    # Reshape to (num_pixels, 4)
+    reshaped_image = valid_pixels.reshape((-1, 4))
+
+    # Determine the dimensions of the reshaped image
+    num_pixels = reshaped_image.shape[0]
+    width = int(np.sqrt(num_pixels))
+    height = (num_pixels + width - 1) // width
+
+    # Pad the reshaped image to make it rectangular
+    padded_image = np.zeros((height * width, 4), dtype=np.uint8)
+    padded_image[:num_pixels, :] = reshaped_image
+
+    # Reshape the padded image to the desired dimensions
+    final_image = padded_image.reshape((height, width, 4))
+
+    # Split channel
+    b, g, r, a = cv.split(final_image)
+
+    return cv.merge((b, g, r))
+

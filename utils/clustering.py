@@ -79,47 +79,51 @@ def f1(precision_score: float, recall_score: float) -> float:
     return 2 * (precision_score * recall_score) / (precision_score + recall_score)
 
 
-def compute_color_histograms(images: list, flatten: bool = True) -> list:
+def compute_color_histograms(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (list, np.ndarray):
     """
     Computes the color histograms for a list of images.
 
     Args:
         images (list): List of images to process.
+        image_ref: Image reference.
         flatten (bool): Whether to flatten the histograms. Defaults to True.
-
     Returns:
-        list: List of histograms for each image.
+        (list, np.ndarray): List of histograms for each image. Histogram color of image reference.
     """
-    histograms = []
+    histograms_fragments = []
     for image in tqdm(images, desc="Computing color histograms"):
         # Calculate the color histogram for the image
         hist_src = cv.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-        hist_dst = cv.normalize(hist_src, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX)
+        cv.normalize(hist_src, hist_src, alpha=0, beta=1, norm_type=cv.NORM_MINMAX)
 
         if flatten:
-            hist_dst = hist_dst.flatten()
+            hist_src = hist_src.flatten()
 
-        histograms.append(hist_dst)
+        histograms_fragments.append(hist_src)
 
-    return histograms
+    hist_image_ref = None
+
+    if image_ref is not None:
+        hist_image_ref = cv.calcHist([image_ref], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+        cv.normalize(hist_image_ref, hist_image_ref, alpha=0, beta=1, norm_type=cv.NORM_MINMAX)
+
+    return histograms_fragments, hist_image_ref
 
 
-def compute_jacobians(images: list, flatten: bool = True) -> list:
+def compute_jacobians(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (list, np.ndarray):
     """
     Computes the Jacobians for a list of images.
 
     Args:
         images (list): List of images to process.
+        image_ref (np.ndarray): Image Ref.
         flatten (bool): Whether to flatten the Jacobians. Defaults to True.
 
     Returns:
         list: List of Jacobians for each image.
     """
-    max_width = max(image.shape[1] for image in images)
-    max_height = max(image.shape[0] for image in images)
 
-    jacobians = []
-    for image in tqdm(images, desc="Computing Jacobians"):
+    def compute_jacobian(image: np.ndarray, max_width: int, max_height: int, flatten: bool) -> np.ndarray:
         # Resize the image to the maximum dimensions
         reshaped_image = cv.resize(image, (max_width, max_height))
         reshaped_image = cv.cvtColor(reshaped_image, cv.COLOR_BGR2HSV)
@@ -130,9 +134,26 @@ def compute_jacobians(images: list, flatten: bool = True) -> list:
         if flatten:
             jacobian = jacobian.flatten()
 
-        jacobians.append(jacobian)
+        return jacobian
 
-    return jacobians
+    max_width = max(image.shape[1] for image in images)
+    max_height = max(image.shape[0] for image in images)
+
+    if image_ref is not None:
+        max_width = max(max_width, image_ref.shape[1])
+        max_height = max(max_height, image_ref.shape[0])
+
+    jacobians_fragments = []
+    for image in tqdm(images, desc="Computing Jacobians"):
+        jacobian = compute_jacobian(image, max_width, max_height, flatten)
+        jacobians_fragments.append(jacobian)
+
+    jacobian_image_ref = None
+
+    if image_ref is not None:
+        jacobian_image_ref = compute_jacobian(image_ref, max_width, max_height, flatten)
+
+    return jacobians_fragments, jacobian_image_ref
 
 
 def reshape_jacobians(jacobian: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -155,41 +176,53 @@ def reshape_jacobians(jacobian: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.
     return gx, gx_gray, gy, gy_gray
 
 
-def compute_color_histogram_dist_matrix(histograms: list):
+def compute_color_histogram_dist_matrix(histograms: list, histogram_image_ref: np.ndarray = None) -> np.ndarray:
     """
        Computes the distance matrix based on color histograms of input images.
 
        Args:
+           histogram_image_ref (np.ndarray): Image Ref color histogram
            histograms (np.ndarray): Array of color histograms.
 
        Returns:
            np.ndarray: Similarity matrix.
     """
 
+    def compute_histograms_similarity(histogram1: np.ndarray, histogram2: np.ndarray) -> float:
+        correlation = cv.compareHist(histogram1, histogram2, cv.HISTCMP_CORREL)
+        # Chi-square distance is sensitive to differences in the shape of histograms.
+        # It's useful when we want to capture differences in the color distribution between images.
+        chi_square_distance = cv.compareHist(histogram1, histogram2, cv.HISTCMP_CHISQR)
+        # Intersection measures the overlap between histograms.
+        # It's useful when we want to capture how much two histograms share common values
+        # (objects observed from different view points)
+        intersection = cv.compareHist(histogram1, histogram2, cv.HISTCMP_INTERSECT) / np.sum(histogram1)
+
+        # correlation and intersection are measures where higher values indicate higher distance while
+        # chi-square distance, on the other hand, is a measure where a smaller value indicates higher distance.
+        # A smaller chi-square value indicates less difference between the histograms. By negating it,
+        # we penalize dissimilar histograms
+        distance = 0.5 * correlation + 0.25 * intersection - 0.25 * chi_square_distance
+
+        # technically it is a similarity measure, so we need to maintain it positive if we
+        # intend to use it as a distance measure
+        if distance < 0:
+            distance = -distance
+
+        return distance
+
     # calculate matrix distance
     distance_matrix = np.zeros((len(histograms), len(histograms)))  # Initialize distance matrix
 
     for i in (tqdm(range(len(histograms)), desc="Calculating similarities")):
         for j in range(i + 1, len(histograms)):
-            correlation = cv.compareHist(histograms[i], histograms[j], cv.HISTCMP_CORREL)
-            # Chi-square distance is sensitive to differences in the shape of histograms.
-            # It's useful when we want to capture differences in the color distribution between images.
-            chi_square_distance = cv.compareHist(histograms[i], histograms[j], cv.HISTCMP_CHISQR)
-            # Intersection measures the overlap between histograms.
-            # It's useful when we want to capture how much two histograms share common values
-            # (objects observed from different view points)
-            intersection = cv.compareHist(histograms[i], histograms[j], cv.HISTCMP_INTERSECT) / np.sum(histograms[i])
+            # distance between histograms[i] and histograms[j]
+            distance = compute_histograms_similarity(histograms[i], histograms[j])
 
-            # correlation and intersection are measures where higher values indicate higher distance while
-            # chi-square distance, on the other hand, is a measure where a smaller value indicates higher distance.
-            # A smaller chi-square value indicates less difference between the histograms. By negating it,
-            # we penalize dissimilar histograms
-            distance = 0.5 * correlation + 0.25 * intersection - 0.25 * chi_square_distance
-
-            # technically it is a similarity measure, so we need to maintain it positive if we
-            # intend to use it as a distance measure
-            if distance < 0:
-                distance = -distance
+            if histogram_image_ref is not None:
+                distance_hist_i_ref = compute_histograms_similarity(histograms[i], histogram_image_ref)
+                distance_hist_j_ref = compute_histograms_similarity(histograms[j], histogram_image_ref)
+                distance = (distance * 0.25 + distance_hist_i_ref * 0.5 + distance_hist_j_ref * 0.5)
 
             distance_matrix[i, j] = distance
             distance_matrix[j, i] = distance
@@ -197,18 +230,33 @@ def compute_color_histogram_dist_matrix(histograms: list):
     return distance_matrix
 
 
-def compute_jacobians_dist_matrix(jacobians: list, combine="mean", metric: str = 'euclidean'):
+def compute_jacobians_dist_matrix(jacobians: list, jacobian_image_ref: np.ndarray = None, combine="mean", metric: str = 'euclidean'):
     """
         Computes the distance matrix based on image gradients (Jacobians) of input images.
 
         Args:
             jacobians (np.ndarray): List of image gradient jacobians.
+            jacobian_image_ref (np.ndarray): Image Reference gradient jacobian.
             combine (str): Method to combine distances ('mean' or 'median').
             metric (str): Metric to use for computing pairwise distances.
 
         Returns:
             np.ndarray: Similarity matrix.
     """
+    def compute_jacobians_distance(gx: np.ndarray, gx_gray: np.ndarray, gy: np.ndarray, gy_gray: np.ndarray,
+                                   gx_2: np.ndarray, gx_gray_2: np.ndarray, gy_2: np.ndarray, gy_gray_2: np.ndarray) -> float:
+        dist_gx = pairwise_distances(gx, gx_2, metric=metric)
+        dist_gy = pairwise_distances(gy, gy_2, metric=metric)
+        dist_gx_gray = pairwise_distances(gx_gray, gx_gray_2, metric=metric)
+        dist_gy_gray = pairwise_distances(gy_gray, gy_gray_2, metric=metric)
+
+        distance = 0
+        if combine == "mean":
+            distance = np.mean([dist_gx, dist_gy, dist_gx_gray, dist_gy_gray])
+        elif combine == "median":
+            distance = np.median([dist_gx, dist_gy, dist_gx_gray, dist_gy_gray])
+
+        return distance
 
     if combine not in ['mean', 'median']:
         raise ValueError("combine must be 'mean' or 'median'")
@@ -219,16 +267,16 @@ def compute_jacobians_dist_matrix(jacobians: list, combine="mean", metric: str =
         gx, gx_gray, gy, gy_gray = reshape_jacobians(jacobians[i])
         for j in range(i + 1, len(jacobians)):
             gx_2, gx_gray_2, gy_2, gy_gray_2 = reshape_jacobians(jacobians[j])
+            # distance between jacobians[i] and jacobians[j]
+            distance = compute_jacobians_distance(gx, gx_gray, gy, gy_gray, gx_2, gx_gray_2, gy_2, gy_gray_2)
 
-            dist_gx = pairwise_distances(gx, gx_2, metric=metric)
-            dist_gy = pairwise_distances(gy, gy_2, metric=metric)
-            dist_gx_gray = pairwise_distances(gx_gray, gx_gray_2, metric=metric)
-            dist_gy_gray = pairwise_distances(gy_gray, gy_gray_2, metric=metric)
-
-            if combine == "mean":
-                distance = np.mean([dist_gx, dist_gy, dist_gx_gray, dist_gy_gray])
-            elif combine == "median":
-                distance = np.median([dist_gx, dist_gy, dist_gx_gray, dist_gy_gray])
+            if jacobian_image_ref is not None:
+                gx_ref, gx_gray_ref, gy_ref, gy_gray_ref = reshape_jacobians(jacobian_image_ref)
+                distance_jacobians_i_ref = compute_jacobians_distance(gx, gx_gray, gy, gy_gray, gx_ref, gx_gray_ref,
+                                                                      gy_ref, gy_gray_ref)
+                distance_jacobians_j_ref = compute_jacobians_distance(gx_2, gx_gray_2, gy_2, gy_gray_2, gx_ref,
+                                                                      gx_gray_ref, gy_ref, gy_gray_ref)
+                distance = (distance * 0.25 + distance_jacobians_i_ref * 0.5 + distance_jacobians_j_ref * 0.5)
 
             distance_matrix[i, j] = distance
             distance_matrix[j, i] = distance

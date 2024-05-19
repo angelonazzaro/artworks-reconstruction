@@ -1,10 +1,11 @@
 import os
 import shutil
+import json
 
 import cv2 as cv
 import numpy as np
 
-from typing import Tuple
+from typing import Tuple, List, Optional
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
 
@@ -12,30 +13,51 @@ from .feature_extraction import compute_image_gradient
 from .edge_extraction import extract_working_region, filter_working_region
 
 
-def precision(reference_image_id: int, cluster_dir: str, ext: str = ".png") -> float:
+def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", output_file: str = None) -> dict:
     """
-    Calculates precision given a reference image ID and a directory containing images.
+    Calculates precision scores for each cluster directory given a reference image ID and a root directory containing images.
+    Also calculates the recall for the cluster directory with the highest precision.
 
     Args:
         reference_image_id (int): The ID of the reference image.
-        cluster_dir (str): Path to the directory containing images.
+        root_dir (str): Path to the directory containing the clusters.
         ext (str, optional): File extension to filter images (default is ".png").
+        output_file (str, optional): Path to the file where metrics will be saved (default is None).
 
     Returns:
-        float: Precision score (true positives / (true positives + false positives)).
+        dict: A dictionary containing:
+            - "max_item": A tuple with the directory having the highest precision score and the score itself.
+            - "precision_scores": A dictionary with precision scores for each cluster directory.
+            - "recall": The recall score for the cluster directory with the highest precision.
     """
-    files = os.listdir(cluster_dir)
-    total = len(files)
-    tp = 0
+    precision_scores = {}
+    first_dir = True
 
-    for image in files:
-        if not image.endswith(ext):
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        if first_dir:
+            first_dir = False
             continue
 
-        if image.split(".")[1] == str(reference_image_id):
-            tp += 1
+        tp = 0
+        for filename in filenames:
+            if not filename.endswith(ext):
+                continue
+            if filename.split(".")[1] == str(reference_image_id):
+                tp += 1
+        precision_scores[dirpath.split(os.path.sep)[-1]] = tp / len(filenames) if filenames else 0
 
-    return tp / total
+    cluster_dir = max(precision_scores, key=precision_scores.get)
+
+    metrics = {
+        "max_item": (cluster_dir, precision_scores[cluster_dir]),
+        "precision_scores": precision_scores,
+        "recall": recall(reference_image_id=reference_image_id, root_dir=root_dir,
+                         cluster_dir_exp=cluster_dir, ext=ext)
+    }
+
+    if output_file is not None:
+        json.dump(metrics, open(output_file, "w"))
+    return metrics
 
 
 def recall(reference_image_id: int, root_dir: str, cluster_dir_exp: str, ext: str = ".png") -> float:
@@ -79,7 +101,8 @@ def f1(precision_score: float, recall_score: float) -> float:
     return 2 * (precision_score * recall_score) / (precision_score + recall_score)
 
 
-def compute_color_histograms(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (list, np.ndarray):
+def compute_color_histograms(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (
+        List[np.ndarray] | Tuple[List[np.ndarray], Optional[np.ndarray]]):
     """
     Computes the color histograms for a list of images.
 
@@ -101,16 +124,17 @@ def compute_color_histograms(images: list, image_ref: np.ndarray = None, flatten
 
         histograms_fragments.append(hist_src)
 
-    hist_image_ref = None
-
     if image_ref is not None:
         hist_image_ref = cv.calcHist([image_ref], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
         cv.normalize(hist_image_ref, hist_image_ref, alpha=0, beta=1, norm_type=cv.NORM_MINMAX)
 
-    return histograms_fragments, hist_image_ref
+        return histograms_fragments, hist_image_ref
+
+    return histograms_fragments
 
 
-def compute_jacobians(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (list, np.ndarray):
+def compute_jacobians(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (
+        List[np.ndarray] | Tuple[List[np.ndarray], Optional[np.ndarray]]):
     """
     Computes the Jacobians for a list of images.
 
@@ -153,7 +177,9 @@ def compute_jacobians(images: list, image_ref: np.ndarray = None, flatten: bool 
     if image_ref is not None:
         jacobian_image_ref = compute_jacobian(image_ref, max_width, max_height, flatten)
 
-    return jacobians_fragments, jacobian_image_ref
+    if image_ref is not None:
+        return jacobians_fragments, jacobian_image_ref
+    return jacobians_fragments
 
 
 def reshape_jacobians(jacobian: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:

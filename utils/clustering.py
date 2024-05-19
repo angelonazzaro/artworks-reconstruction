@@ -46,13 +46,15 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
                 tp += 1
         precision_scores[dirpath.split(os.path.sep)[-1]] = tp / len(filenames) if filenames else 0
 
-    cluster_dir = max(precision_scores, key=precision_scores.get)
+    max_value = max(precision_scores.values())
+    cluster_dirs = [dirpath for dirpath, score in precision_scores.items() if score == max_value]
+    max_items = [(dirpath, score) for dirpath, score in precision_scores.items() if score == max_value]
 
     metrics = {
-        "max_item": (cluster_dir, precision_scores[cluster_dir]),
+        "max_items": max_items,
         "precision_scores": precision_scores,
         "recall": recall(reference_image_id=reference_image_id, root_dir=root_dir,
-                         cluster_dir_exp=cluster_dir, ext=ext)
+                         cluster_dirs_exp=cluster_dirs, ext=ext)
     }
 
     if output_file is not None:
@@ -60,14 +62,14 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
     return metrics
 
 
-def recall(reference_image_id: int, root_dir: str, cluster_dir_exp: str, ext: str = ".png") -> float:
+def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], ext: str = ".png") -> float:
     """
     Calculates recall given a reference image ID, root directory, and an excluded cluster directory.
 
     Args:
         reference_image_id (int): The ID of the reference image.
         root_dir (str): Root directory containing subdirectories.
-        cluster_dir_exp (str): Name of the excluded cluster directory.
+        cluster_dirs_exp (List[str]): Names of the excluded cluster directories.
         ext (str, optional): File extension to filter images (default is ".png").
 
     Returns:
@@ -76,7 +78,7 @@ def recall(reference_image_id: int, root_dir: str, cluster_dir_exp: str, ext: st
     tp = 0
     total = 0
     for dirpath, dirnames, filenames in os.walk(root_dir):
-        dirnames[:] = [d for d in dirnames if d != str(cluster_dir_exp)]
+        dirnames[:] = [d for d in dirnames if d not in cluster_dirs_exp]
         for filename in filenames:
             if not filename.endswith(ext):
                 continue

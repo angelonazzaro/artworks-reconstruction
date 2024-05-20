@@ -50,7 +50,7 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
     cluster_dirs = []
     first_dir = True
 
-    for dirpath, dirnames, filenames in os.walk("clusters/kmeans/colors"):
+    for dirpath, dirnames, filenames in os.walk(root_dir):
         if first_dir:
             cluster_dirs = dirnames.copy()
             first_dir = False
@@ -70,7 +70,7 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
         cluster_dirx = [d for d in cluster_dirs if d != dirp]
 
         for cluster_dir in cluster_dirx:
-            for filename in os.listdir(os.path.join("clusters/kmeans/colors", cluster_dir)):
+            for filename in os.listdir(os.path.join(root_dir, cluster_dir)):
                 if filename.endswith("png") and filename.split(".")[1] == str(40):
                     total += 1
 

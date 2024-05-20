@@ -13,6 +13,22 @@ from .feature_extraction import compute_image_gradient
 from .edge_extraction import extract_working_region, filter_working_region
 
 
+def restore_data(in_dir: str, output_dir: str):
+    """
+        Move all files from the input directory to the output directory.
+
+        This function iterates over all files in the specified input directory (`in_dir`)
+        and moves each file to the specified output directory (`output_dir`). If a file
+        with the same name already exists in the output directory, it will be overwritten.
+
+        Args:
+            in_dir (str): The path to the input directory containing the files to be moved.
+            output_dir (str): The path to the output directory where the files will be moved to.
+    """
+    for filename in os.listdir(in_dir):
+        shutil.move(os.path.join(in_dir, filename), os.path.join(output_dir, filename))
+
+
 def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", output_file: str = None) -> dict:
     """
     Calculates precision scores for each cluster directory given a reference image ID and a root directory containing images.
@@ -31,20 +47,34 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
             - "recall": The recall score for the cluster directory with the highest precision.
     """
     precision_scores = {}
+    cluster_dirs = []
     first_dir = True
 
-    for dirpath, dirnames, filenames in os.walk(root_dir):
+    for dirpath, dirnames, filenames in os.walk("clusters/kmeans/colors"):
         if first_dir:
+            cluster_dirs = dirnames.copy()
             first_dir = False
             continue
 
         tp = 0
+        total = 0
         for filename in filenames:
-            if not filename.endswith(ext):
+            if not filename.endswith("png"):
                 continue
-            if filename.split(".")[1] == str(reference_image_id):
+            if filename.split(".")[1] == str(33):
                 tp += 1
-        precision_scores[dirpath.split(os.path.sep)[-1]] = tp / len(filenames) if filenames else 0
+            else:
+                total += 1
+
+        dirp = dirpath.split(os.path.sep)[-1]
+        cluster_dirx = [d for d in cluster_dirs if d != dirp]
+
+        for cluster_dir in cluster_dirx:
+            for filename in os.listdir(os.path.join("clusters/kmeans/colors", cluster_dir)):
+                if filename.endswith("png") and filename.split(".")[1] == str(40):
+                    total += 1
+
+        precision_scores[dirp] = tp / total if total else 0
 
     max_value = max(precision_scores.values())
     cluster_dirs = [dirpath for dirpath, score in precision_scores.items() if score == max_value]
@@ -329,14 +359,15 @@ def create_dataset(img_dir: str, img_ext: str = "png", extract_borders: bool = T
         raise ValueError(f'Image directory {img_dir} does not exist!')
 
     images = []
-    for filename in os.listdir(img_dir):
+    for filename in tqdm(os.listdir(img_dir), desc="Creating dataset"):
         if not filename.lower().endswith(img_ext):
             continue
 
         image = cv.imread(os.path.join(img_dir, filename), cv.IMREAD_UNCHANGED)
         if extract_borders:
             image = filter_working_region(extract_working_region(image, threshold=threshold))
-        images.append(image)
+        denoised_image = cv.fastNlMeansDenoisingColored(image)
+        images.append(denoised_image)
 
     return images
 

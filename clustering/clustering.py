@@ -9,8 +9,8 @@ from typing import Tuple, List, Optional
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
 
-from .feature_extraction import compute_image_gradient
-from .edge_extraction import extract_working_region, filter_working_region
+from feature_extraction.feature_extraction import compute_image_gradient
+from preprocessing.edge_extraction import extract_working_region, filter_working_region
 
 
 def restore_data(in_dir: str, output_dir: str):
@@ -47,34 +47,21 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
             - "recall": The recall score for the cluster directory with the highest precision.
     """
     precision_scores = {}
-    cluster_dirs = []
     first_dir = True
 
     for dirpath, dirnames, filenames in os.walk(root_dir):
         if first_dir:
-            cluster_dirs = dirnames.copy()
             first_dir = False
             continue
 
         tp = 0
-        total = 0
         for filename in filenames:
             if not filename.endswith("png"):
                 continue
             if filename.split(".")[1] == str(33):
                 tp += 1
-            else:
-                total += 1
 
-        dirp = dirpath.split(os.path.sep)[-1]
-        cluster_dirx = [d for d in cluster_dirs if d != dirp]
-
-        for cluster_dir in cluster_dirx:
-            for filename in os.listdir(os.path.join(root_dir, cluster_dir)):
-                if filename.endswith("png") and filename.split(".")[1] == str(40):
-                    total += 1
-
-        precision_scores[dirp] = tp / total if total else 0
+        precision_scores[dirpath.split(os.path.sep)[-1]] = tp / len(filenames) if filenames else 0
 
     max_value = max(precision_scores.values())
     cluster_dirs = [dirpath for dirpath, score in precision_scores.items() if score == max_value]

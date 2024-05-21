@@ -56,11 +56,10 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", o
 
         tp = 0
         for filename in filenames:
-            if not filename.endswith("png"):
+            if not filename.endswith(ext):
                 continue
-            if filename.split(".")[1] == str(33):
+            if filename.split(".")[1] == str(reference_image_id):
                 tp += 1
-
         precision_scores[dirpath.split(os.path.sep)[-1]] = tp / len(filenames) if filenames else 0
 
     max_value = max(precision_scores.values())
@@ -93,17 +92,24 @@ def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], 
         float: Recall score (true positives / (true positives + false negatives)).
     """
     tp = 0
-    total = 0
+    for cluster_dir in cluster_dirs_exp:
+        for root, _, files in os.walk(os.path.join(root_dir, cluster_dir)):
+            for filename in files:
+                if not filename.endswith(ext):
+                    continue
+                if filename.split(".")[1] == str(reference_image_id):
+                    tp += 1
+
+    fn = 0
     for dirpath, dirnames, filenames in os.walk(root_dir):
         dirnames[:] = [d for d in dirnames if d not in cluster_dirs_exp]
         for filename in filenames:
             if not filename.endswith(ext):
                 continue
             if filename.split(".")[1] == str(reference_image_id):
-                tp += 1
-            total += 1
+                fn += 1
 
-    return tp / total
+    return tp / tp + fn
 
 
 def f1(precision_score: float, recall_score: float) -> float:

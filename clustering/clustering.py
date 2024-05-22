@@ -5,7 +5,7 @@ import json
 import cv2 as cv
 import numpy as np
 
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict, Union
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
 
@@ -31,7 +31,7 @@ def restore_data(in_dir: str, output_dir: str):
 
 def f1(precision_score: float, recall_score: float) -> float:
     """
-    Calculates F1 score given precision and recall.
+    Calculates the F1 score given precision and recall.
 
     Args:
         precision_score (float): Precision score.
@@ -40,8 +40,9 @@ def f1(precision_score: float, recall_score: float) -> float:
     Returns:
         float: F1 score.
     """
-    return 2 * (precision_score * recall_score) / (precision_score + recall_score) if (
-            precision_score + recall_score) else 0
+    if precision_score + recall_score == 0:
+        return 0.0
+    return 2 * (precision_score * recall_score) / (precision_score + recall_score)
 
 
 def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], ext: str = ".png") -> float:
@@ -79,52 +80,79 @@ def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], 
     return tp / total if total else 0
 
 
-def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", output_file: str = None) -> dict:
+def precision(reference_image_id: int, cluster_dir: str, ext: str = ".png") -> float:
     """
-    Calculates precision scores for each cluster directory given a reference image ID and a root directory containing images.
-    Also calculates the recall for the cluster directory with the highest precision.
+    Calculates the precision score for a given cluster directory and reference image ID.
+
+    Args:
+        reference_image_id (int): The ID of the reference image.
+        cluster_dir (str): Path to the cluster directory.
+        ext (str, optional): File extension to filter images (default is ".png").
+
+    Returns:
+        float: Precision score (true positives / total positives).
+    """
+    filenames = os.listdir(cluster_dir)
+    tp = 0
+
+    for filename in filenames:
+        if not filename.endswith(ext):
+            continue
+        if filename.split(".")[1] == str(reference_image_id):
+            tp += 1
+
+    return tp / len(filenames) if filenames else 0
+
+
+def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", metric: str = "f1",
+                    output_file: str = None) -> Dict[str, Union[Tuple[str, float], Dict[str, Dict[str, float]]]]:
+    """
+    Calculates precision, recall and f1 scores for each cluster directory given a reference image ID and a root directory containing
+    images.
 
     Args:
         reference_image_id (int): The ID of the reference image.
         root_dir (str): Path to the directory containing the clusters.
         ext (str, optional): File extension to filter images (default is ".png").
+        metric (str): Metric to consider for evaluation. Defaults to f1-score.
         output_file (str, optional): Path to the file where metrics will be saved (default is None).
 
     Returns:
         dict: A dictionary containing:
-            - "max_item": A tuple with the directory having the highest precision score and the score itself.
-            - "precision_scores": A dictionary with precision scores for each cluster directory.
-            - "recall": The recall score for the cluster directory with the highest precision.
+            - "max_items": A tuple with the directory having the highest precision score and the score itself.
+            - "scores": A dictionary with precision, recall and f1 scores for each cluster directory.
     """
-    f1_scores = {}
+    scores = {}
     first_dir = True
 
     for dirpath, dirnames, filenames in os.walk(root_dir):
         if first_dir:
             first_dir = False
             continue
-        tp = 0
-        for filename in filenames:
-            if not filename.endswith(ext):
-                continue
-            if filename.split(".")[1] == str(reference_image_id):
-                tp += 1
-        precision_score = tp / len(filenames) if filenames else 0
-        recall_score = recall(reference_image_id=reference_image_id, root_dir=root_dir,
-                              cluster_dirs_exp=[dirpath.split(os.path.sep)[-1]], ext=ext)
-        f1_scores[dirpath.split(os.path.sep)[-1]] = f1(precision_score, recall_score)
 
-    max_value = max(f1_scores.values())
-    cluster_dirs = [dirpath for dirpath, score in f1_scores.items() if score == max_value]
-    max_items = [(dirpath, score) for dirpath, score in f1_scores.items() if score == max_value]
+        dirp = os.path.basename(dirpath)
+        precision_score = precision(reference_image_id, dirpath, ext)
+        recall_score = recall(reference_image_id, root_dir, [dirp], ext)
+        f1_score = f1(precision_score, recall_score)
+
+        scores[dirp] = {
+            "precision": precision_score,
+            "recall": recall_score,
+            "f1": f1_score
+        }
+
+    max_metric_value = max(scores.items(), key=lambda x: x[1][metric])[1][metric]
+    max_items = [(dirpath, score[metric]) for dirpath, score in scores.items() if score[metric] == max_metric_value]
 
     metrics = {
-        "max_items": max_items,
-        "f1_scores": f1_scores,
+        f"max_{metric}": max_items,
+        "scores": scores,
     }
 
-    if output_file is not None:
-        json.dump(metrics, open(output_file, "w"))
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(metrics, f, indent=4)
+
     return metrics
 
 

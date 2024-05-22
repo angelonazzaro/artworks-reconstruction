@@ -29,53 +29,19 @@ def restore_data(in_dir: str, output_dir: str):
         shutil.move(os.path.join(in_dir, filename), os.path.join(output_dir, filename))
 
 
-def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", output_file: str = None) -> dict:
+def f1(precision_score: float, recall_score: float) -> float:
     """
-    Calculates precision scores for each cluster directory given a reference image ID and a root directory containing images.
-    Also calculates the recall for the cluster directory with the highest precision.
+    Calculates F1 score given precision and recall.
 
     Args:
-        reference_image_id (int): The ID of the reference image.
-        root_dir (str): Path to the directory containing the clusters.
-        ext (str, optional): File extension to filter images (default is ".png").
-        output_file (str, optional): Path to the file where metrics will be saved (default is None).
+        precision_score (float): Precision score.
+        recall_score (float): Recall score.
 
     Returns:
-        dict: A dictionary containing:
-            - "max_item": A tuple with the directory having the highest precision score and the score itself.
-            - "precision_scores": A dictionary with precision scores for each cluster directory.
-            - "recall": The recall score for the cluster directory with the highest precision.
+        float: F1 score.
     """
-    precision_scores = {}
-    first_dir = True
-
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        if first_dir:
-            first_dir = False
-            continue
-
-        tp = 0
-        for filename in filenames:
-            if not filename.endswith(ext):
-                continue
-            if filename.split(".")[1] == str(reference_image_id):
-                tp += 1
-        precision_scores[dirpath.split(os.path.sep)[-1]] = tp / len(filenames) if filenames else 0
-
-    max_value = max(precision_scores.values())
-    cluster_dirs = [dirpath for dirpath, score in precision_scores.items() if score == max_value]
-    max_items = [(dirpath, score) for dirpath, score in precision_scores.items() if score == max_value]
-
-    metrics = {
-        "max_items": max_items,
-        "precision_scores": precision_scores,
-        "recall": recall(reference_image_id=reference_image_id, root_dir=root_dir,
-                         cluster_dirs_exp=cluster_dirs, ext=ext)
-    }
-
-    if output_file is not None:
-        json.dump(metrics, open(output_file, "w"))
-    return metrics
+    return 2 * (precision_score * recall_score) / (precision_score + recall_score) if (
+            precision_score + recall_score) else 0
 
 
 def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], ext: str = ".png") -> float:
@@ -108,22 +74,58 @@ def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], 
                 continue
             if filename.split(".")[1] == str(reference_image_id):
                 fn += 1
+    total = tp + fn
 
-    return tp / tp + fn
+    return tp / total if total else 0
 
 
-def f1(precision_score: float, recall_score: float) -> float:
+def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", output_file: str = None) -> dict:
     """
-    Calculates F1 score given precision and recall.
+    Calculates precision scores for each cluster directory given a reference image ID and a root directory containing images.
+    Also calculates the recall for the cluster directory with the highest precision.
 
     Args:
-        precision_score (float): Precision score.
-        recall_score (float): Recall score.
+        reference_image_id (int): The ID of the reference image.
+        root_dir (str): Path to the directory containing the clusters.
+        ext (str, optional): File extension to filter images (default is ".png").
+        output_file (str, optional): Path to the file where metrics will be saved (default is None).
 
     Returns:
-        float: F1 score.
+        dict: A dictionary containing:
+            - "max_item": A tuple with the directory having the highest precision score and the score itself.
+            - "precision_scores": A dictionary with precision scores for each cluster directory.
+            - "recall": The recall score for the cluster directory with the highest precision.
     """
-    return 2 * (precision_score * recall_score) / (precision_score + recall_score)
+    f1_scores = {}
+    first_dir = True
+
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        if first_dir:
+            first_dir = False
+            continue
+        tp = 0
+        for filename in filenames:
+            if not filename.endswith(ext):
+                continue
+            if filename.split(".")[1] == str(reference_image_id):
+                tp += 1
+        precision_score = tp / len(filenames) if filenames else 0
+        recall_score = recall(reference_image_id=reference_image_id, root_dir=root_dir,
+                              cluster_dirs_exp=[dirpath.split(os.path.sep)[-1]], ext=ext)
+        f1_scores[dirpath.split(os.path.sep)[-1]] = f1(precision_score, recall_score)
+
+    max_value = max(f1_scores.values())
+    cluster_dirs = [dirpath for dirpath, score in f1_scores.items() if score == max_value]
+    max_items = [(dirpath, score) for dirpath, score in f1_scores.items() if score == max_value]
+
+    metrics = {
+        "max_items": max_items,
+        "f1_scores": f1_scores,
+    }
+
+    if output_file is not None:
+        json.dump(metrics, open(output_file, "w"))
+    return metrics
 
 
 def compute_color_histograms(images: list, image_ref: np.ndarray = None, flatten: bool = True) -> (
@@ -281,7 +283,8 @@ def compute_color_histogram_dist_matrix(histograms: list, histogram_image_ref: n
     return distance_matrix
 
 
-def compute_jacobians_dist_matrix(jacobians: list, jacobian_image_ref: np.ndarray = None, combine="mean", metric: str = 'euclidean'):
+def compute_jacobians_dist_matrix(jacobians: list, jacobian_image_ref: np.ndarray = None, combine="mean",
+                                  metric: str = 'euclidean'):
     """
         Computes the distance matrix based on image gradients (Jacobians) of input images.
 
@@ -294,8 +297,10 @@ def compute_jacobians_dist_matrix(jacobians: list, jacobian_image_ref: np.ndarra
         Returns:
             np.ndarray: Similarity matrix.
     """
+
     def compute_jacobians_distance(gx: np.ndarray, gx_gray: np.ndarray, gy: np.ndarray, gy_gray: np.ndarray,
-                                   gx_2: np.ndarray, gx_gray_2: np.ndarray, gy_2: np.ndarray, gy_gray_2: np.ndarray) -> float:
+                                   gx_2: np.ndarray, gx_gray_2: np.ndarray, gy_2: np.ndarray,
+                                   gy_gray_2: np.ndarray) -> float:
         dist_gx = pairwise_distances(gx, gx_2, metric=metric)
         dist_gy = pairwise_distances(gy, gy_2, metric=metric)
         dist_gx_gray = pairwise_distances(gx_gray, gx_gray_2, metric=metric)

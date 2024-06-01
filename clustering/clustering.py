@@ -7,10 +7,29 @@ import numpy as np
 
 from typing import Tuple, List, Optional, Dict, Union
 from sklearn.metrics import pairwise_distances
+from skimage.metrics import structural_similarity
 from tqdm import tqdm
 
 from feature_extraction.feature_extraction import compute_image_gradient
 from preprocessing.edge_extraction import extract_working_region, filter_working_region
+
+
+def compute_ssim_scores_fragment_per_fragment(fragments, reference_id):
+    n_fragments = len(fragments)
+    ssim_scores = np.ones((n_fragments, n_fragments))
+
+    # compute the SSIM for each fragment with regard to a specific reference image
+    for i in (tqdm(range(n_fragments), desc="Calculating similarities")):
+        for j in range(i + 1, n_fragments):
+            # distance between histograms[i] and histograms[j]
+            fragment_i_gray = cv.cvtColor(fragments[i], cv.COLOR_BGR2GRAY)
+            fragment_j_gray = cv.cvtColor(fragments[j], cv.COLOR_BGR2GRAY)
+            (score, diff) = structural_similarity(fragment_i_gray, fragment_j_gray, full=True)
+
+            ssim_scores[i, j] = score
+            ssim_scores[j, i] = score
+
+    return 1 - ssim_scores
 
 
 def restore_data(in_dir: str, output_dir: str):
@@ -45,7 +64,7 @@ def f1(precision_score: float, recall_score: float) -> float:
     return 2 * (precision_score * recall_score) / (precision_score + recall_score)
 
 
-def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], ext: str = ".png") -> float:
+def recall_in_out_clusters(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], ext: str = ".png") -> float:
     """
     Calculates recall given a reference image ID, root directory, and an excluded cluster directory.
 
@@ -80,6 +99,37 @@ def recall(reference_image_id: int, root_dir: str, cluster_dirs_exp: List[str], 
     return tp / total if total else 0
 
 
+def accuracy_in_out_clusters(reference_image_id: int, root_dir: str, cluster_dirs: List[str], ext: str = ".png"):
+    tp = 0
+    fp = 0
+    for cluster_dir in cluster_dirs:
+        for root, _, files in os.walk(os.path.join(root_dir, cluster_dir)):
+            for filename in files:
+                if not filename.endswith(ext):
+                    continue
+                if filename.split(".")[1] == str(reference_image_id):
+                    tp += 1
+                else:
+                    fp += 1
+
+    tn = 0
+    fn = 0
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [d for d in dirnames if d not in cluster_dirs]
+        for filename in filenames:
+            if not filename.endswith(ext):
+                continue
+            if filename.split(".")[1] == str(reference_image_id):
+                fn += 1
+            else:
+                tn += 1
+
+    total = tp + fn + fp + tn
+    if total:
+        return (tp + tn) / total
+    return 0.0
+
+
 def precision(reference_image_id: int, cluster_dir: str, ext: str = ".png") -> float:
     """
     Calculates the precision score for a given cluster directory and reference image ID.
@@ -104,7 +154,7 @@ def precision(reference_image_id: int, cluster_dir: str, ext: str = ".png") -> f
     return tp / len(filenames) if filenames else 0
 
 
-def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", metric: str = "f1",
+def compute_in_out_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", metric: str = "f1",
                     output_file: str = None) -> Dict[str, Union[Tuple[str, float], Dict[str, Dict[str, float]]]]:
     """
     Calculates precision, recall and f1 scores for each cluster directory given a reference image ID and a root directory containing
@@ -132,13 +182,15 @@ def compute_metrics(reference_image_id: int, root_dir: str, ext: str = ".png", m
 
         dirp = os.path.basename(dirpath)
         precision_score = precision(reference_image_id, dirpath, ext)
-        recall_score = recall(reference_image_id, root_dir, [dirp], ext)
+        recall_score = recall_in_out_clusters(reference_image_id, root_dir, [dirp], ext)
         f1_score = f1(precision_score, recall_score)
+        accuracy = accuracy_in_out_clusters(reference_image_id, root_dir, [dirp], ext)
 
         scores[dirp] = {
             "precision": precision_score,
             "recall": recall_score,
-            "f1": f1_score
+            "f1": f1_score,
+            "accuracy": accuracy
         }
 
     max_metric_value = max(scores.items(), key=lambda x: x[1][metric])[1][metric]
@@ -368,7 +420,8 @@ def compute_jacobians_dist_matrix(jacobians: list, jacobian_image_ref: np.ndarra
     return distance_matrix
 
 
-def create_dataset(img_dir: str, img_ext: str = "png", extract_borders: bool = True, threshold: int = 0) -> list:
+def create_dataset(img_dir: str, img_ext: str = "png", extract_borders: bool = True, threshold: int = 0,
+                   color_model: Optional[int] = None) -> list:
     """
     Create a dataset from images in a directory.
 
@@ -377,6 +430,7 @@ def create_dataset(img_dir: str, img_ext: str = "png", extract_borders: bool = T
         img_ext (str): Extension of the image files.
         extract_borders (bool): Whether to extract borders from images.
         threshold (int): Threshold for border extraction.
+        color_model (Optional, int): OpenCV color model.
 
     Returns:
         list: List of images.
@@ -392,13 +446,18 @@ def create_dataset(img_dir: str, img_ext: str = "png", extract_borders: bool = T
         image = cv.imread(os.path.join(img_dir, filename), cv.IMREAD_UNCHANGED)
         if extract_borders:
             image = filter_working_region(extract_working_region(image, threshold=threshold))
+
+        if color_model is not None:
+            image = cv.cvtColor(image, color_model)
+
         denoised_image = cv.fastNlMeansDenoisingColored(image)
+
         images.append(denoised_image)
 
     return images
 
 
-def create_cluster_dirs(data_dir: str, output_dir: str, labels: list, img_ext: str = "png"):
+def create_cluster_dirs(fragment_paths, output_dir: str, labels: list, img_ext: str = "png"):
     """
     Create directories for each cluster and move images to the corresponding cluster directories.
 
@@ -418,12 +477,6 @@ def create_cluster_dirs(data_dir: str, output_dir: str, labels: list, img_ext: s
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
 
-    filename_images = []
-    for filename in os.listdir(data_dir):
-        if not filename.lower().endswith(img_ext):
-            continue
-        filename_images.append(filename)
-
     # Create cluster directories and move images
     for idx, label in enumerate(tqdm(labels, desc='Creating cluster dirs')):
         # Determine the directory for the current cluster
@@ -431,7 +484,9 @@ def create_cluster_dirs(data_dir: str, output_dir: str, labels: list, img_ext: s
         os.makedirs(cluster_dir, exist_ok=True)
 
         # Get the filename of the image
-        filename_image = filename_images[idx]
+        fragment_path = fragment_paths[idx]
+        fragment_path_split = fragment_path.split(os.path.sep)
 
         # Move the image to the corresponding cluster directory
-        shutil.copy(os.path.join(data_dir, filename_image), os.path.join(cluster_dir, filename_image))
+        shutil.copy(fragment_path, os.path.join(cluster_dir, fragment_path_split[-2] + "_" + fragment_path_split[-1]))
+

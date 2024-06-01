@@ -2,6 +2,26 @@ import cv2 as cv
 import numpy as np
 
 
+def resize_reference_image(reference_image, max_dimension):
+    # we resize the reference image to alleviate the computational cost of performing the SIFT algorithm
+    # to not alter information, we try to maintain the same proportion of the original image
+
+    original_width, original_height, _ = reference_image.shape
+
+    width_scale = max_dimension / original_width
+    height_scale = max_dimension / original_height
+
+    # Use the smaller scaling factor to maintain aspect ratio
+    scaling_factor = min(width_scale, height_scale)
+
+    # Calculate the new dimensions
+    new_width = int(original_width * scaling_factor)
+    new_height = int(original_height * scaling_factor)
+
+    # not (new_width, new_height) -> https://stackoverflow.com/questions/21248245/opencv-image-resize-flips-dimensions
+    return cv.resize(reference_image, (new_height, new_width))
+    
+
 def convert_color_model(input_image: np.ndarray, color_model: int = cv.COLOR_BGR2HSV, keep_alpha: bool = True) \
         -> np.ndarray:
     """

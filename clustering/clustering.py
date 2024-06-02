@@ -14,7 +14,19 @@ from feature_extraction.feature_extraction import compute_image_gradient
 from preprocessing.edge_extraction import extract_working_region, filter_working_region
 
 
-def compute_ssim_scores_fragment_per_fragment(fragments, reference_id):
+def compute_ssim_scores_fragment_per_fragment(fragments: np.ndarray, reference_id: int):
+    """
+    Compute Structural Similarity Index Measure (SSIM) scores between all pairs of image fragments.
+
+    This function computes SSIM scores between each pair of image fragments with respect to a specific reference image.
+    
+    Parameters:
+        fragments (List[numpy.ndarray]): List of image fragments represented as numpy arrays.
+        reference_id: The ID of the reference image.
+    
+    Returns:
+        numpy.ndarray: An array containing SSIM scores between each pair of fragments.
+    """
     n_fragments = len(fragments)
     ssim_scores = np.ones((n_fragments, n_fragments))
 
@@ -30,6 +42,7 @@ def compute_ssim_scores_fragment_per_fragment(fragments, reference_id):
             ssim_scores[j, i] = score
 
     return 1 - ssim_scores
+
 
 
 def restore_data(in_dir: str, output_dir: str):
@@ -100,8 +113,20 @@ def recall_in_out_clusters(reference_image_id: int, root_dir: str, cluster_dirs_
 
 
 def accuracy_in_out_clusters(reference_image_id: int, root_dir: str, cluster_dirs: List[str], ext: str = ".png"):
-    tp = 0
-    fp = 0
+    """
+    Calculate accuracy of images within and outside specified clusters.
+
+    Parameters:
+        reference_image_id (int): The reference image ID to compare against.
+        root_dir (str): The root directory containing all image clusters.
+        cluster_dirs (List[str]): List of directory names containing images in clusters.
+        ext (str, optional): File extension of the images. Defaults to ".png".
+
+    Returns:
+        float: Accuracy score, ranging from 0 to 1. Higher values indicate higher accuracy.
+    """
+    tp = 0  # True positives
+    fp = 0  # False positives
     for cluster_dir in cluster_dirs:
         for root, _, files in os.walk(os.path.join(root_dir, cluster_dir)):
             for filename in files:
@@ -112,8 +137,8 @@ def accuracy_in_out_clusters(reference_image_id: int, root_dir: str, cluster_dir
                 else:
                     fp += 1
 
-    tn = 0
-    fn = 0
+    tn = 0  # True negatives
+    fn = 0  # False negatives
     for dirpath, dirnames, filenames in os.walk(root_dir):
         dirnames[:] = [d for d in dirnames if d not in cluster_dirs]
         for filename in filenames:
@@ -489,4 +514,3 @@ def create_cluster_dirs(fragment_paths, output_dir: str, labels: list, img_ext: 
 
         # Move the image to the corresponding cluster directory
         shutil.copy(fragment_path, os.path.join(cluster_dir, fragment_path_split[-2] + "_" + fragment_path_split[-1]))
-

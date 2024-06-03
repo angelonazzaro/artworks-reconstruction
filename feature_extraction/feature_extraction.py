@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def compute_image_gradient(input_img: np.ndarray, combine: str = "max") -> (np.ndarray, np.ndarray):
+def compute_image_gradient(input_img: np.ndarray, combine: str = "concat") -> (np.ndarray, np.ndarray):
     """
     Compute gradients for each channel of the input image and combine them based on the specified method.
 
@@ -37,6 +37,8 @@ def compute_image_gradient(input_img: np.ndarray, combine: str = "max") -> (np.n
     grayscale_image = cv.cvtColor(input_img, cv.COLOR_BGR2GRAY)
     gx_gray, gy_gray = np.gradient(grayscale_image)
 
+    if combine == "concat":
+        return np.array([[gx_r, gx_b, gx_g, gx_gray], [gy_r, gy_g, gy_b, gy_gray]])
     if combine == "max":
         gx = np.maximum.reduce([gx_r, gx_b, gx_g])
         gy = np.maximum.reduce([gy_r, gy_b, gy_g])
@@ -51,8 +53,6 @@ def compute_image_gradient(input_img: np.ndarray, combine: str = "max") -> (np.n
         gy = np.median([gy_r, gy_b, gy_g], axis=0)
     else:
         raise ValueError("Invalid combine method. Choose between 'concat', 'max', 'mean', 'sum', and 'median'.")
-
-    return np.array([[gx, gx_gray], [gy, gy_gray]])
 
 
 def generate_angular_hist(input_img: np.ndarray, n_bins: int = 9, _n: int = 20, combine: str = "concat",

@@ -14,7 +14,7 @@ from feature_extraction.feature_extraction import compute_image_gradient
 from preprocessing.edge_extraction import extract_working_region, filter_working_region
 
 
-def compute_ssim_scores_fragment_per_fragment(fragments: np.ndarray, reference_id: int):
+def compute_ssim_scores_fragment_per_fragment(fragments: np.ndarray):
     """
     Compute Structural Similarity Index Measure (SSIM) scores between all pairs of image fragments.
 
@@ -22,7 +22,6 @@ def compute_ssim_scores_fragment_per_fragment(fragments: np.ndarray, reference_i
     
     Parameters:
         fragments (List[numpy.ndarray]): List of image fragments represented as numpy arrays.
-        reference_id: The ID of the reference image.
     
     Returns:
         numpy.ndarray: An array containing SSIM scores between each pair of fragments.
@@ -42,7 +41,6 @@ def compute_ssim_scores_fragment_per_fragment(fragments: np.ndarray, reference_i
             ssim_scores[j, i] = score
 
     return 1 - ssim_scores
-
 
 
 def restore_data(in_dir: str, output_dir: str):

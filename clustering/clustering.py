@@ -40,7 +40,43 @@ def compute_ssim_scores_fragment_per_fragment(fragments: np.ndarray):
             ssim_scores[i, j] = score
             ssim_scores[j, i] = score
 
-    return 1 - ssim_scores
+    return ssim_scores
+
+
+def compute_ssim_scores_fragment_per_fragment_hsv(fragments: np.ndarray):
+    """
+    Compute Structural Similarity Index Measure (SSIM) scores between all pairs of image fragments.
+
+    This function computes SSIM scores between each pair of image fragments with respect to a specific reference image.
+
+    Parameters:
+        fragments (List[numpy.ndarray]): List of image fragments represented as numpy arrays.
+
+    Returns:
+        numpy.ndarray: An array containing SSIM scores between each pair of fragments.
+    """
+    n_fragments = len(fragments)
+    ssim_scores = np.ones((n_fragments, n_fragments))
+
+    # compute the SSIM for each fragment with regard to a specific reference image
+    for i in (tqdm(range(n_fragments), desc="Calculating similarities")):
+        for j in range(i + 1, n_fragments):
+            # distance between histograms[i] and histograms[j]
+            fragment_i_hsv = cv.cvtColor(fragments[i], cv.COLOR_BGR2HSV)
+            fragment_j_hsv = cv.cvtColor(fragments[j], cv.COLOR_BGR2HSV)
+
+            fragment_h_i, fragment_s_i, fragment_v_i = cv.split(fragment_i_hsv)
+            fragment_h_j, fragment_s_j, fragment_v_j = cv.split(fragment_j_hsv)
+
+            (score_h, diff_h) = structural_similarity(fragment_h_i, fragment_h_j, full=True)
+            (score_s, diff_s) = structural_similarity(fragment_s_i, fragment_s_j, full=True)
+            (score_v, diff_v) = structural_similarity(fragment_v_i, fragment_v_j, full=True)
+            score = np.mean([score_h, score_s, score_v])
+
+            ssim_scores[i, j] = score
+            ssim_scores[j, i] = score
+
+    return ssim_scores
 
 
 def restore_data(in_dir: str, output_dir: str):

@@ -8,7 +8,7 @@ import numpy as np
 from typing import Tuple, List, Optional, Dict, Union
 from sklearn.metrics import pairwise_distances
 from skimage.metrics import structural_similarity
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 from feature_extraction.feature_extraction import compute_image_gradient
 from preprocessing.edge_extraction import extract_working_region, filter_working_region
@@ -547,4 +547,4 @@ def create_cluster_dirs(fragment_paths, output_dir: str, labels: list, img_ext: 
         fragment_path_split = fragment_path.split(os.path.sep)
 
         # Move the image to the corresponding cluster directory
-        shutil.copy(fragment_path, os.path.join(cluster_dir, fragment_path_split[-2] + "_" + fragment_path_split[-1]))
+        shutil.copy(fragment_path, os.path.join(cluster_dir, fragment_path_split[-1]))

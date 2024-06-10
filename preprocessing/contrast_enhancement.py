@@ -2,7 +2,8 @@ import numpy as np
 import cv2 as cv
 
 
-def enhance_contrast(input_img: np.ndarray, alpha_channel: np.ndarray,clip_limit=2.0, title_grid_size=(8, 8)) -> np.ndarray:
+def enhance_contrast(input_img: np.ndarray, alpha_channel: np.ndarray, clip_limit=2.0,
+                     title_grid_size=(8, 8)) -> np.ndarray:
     """
     Enhances the contrast of an input image using Contrast Limited Adaptive Histogram Equalization (CLAHE).
 

@@ -2,7 +2,7 @@
 <div align="center">
 
 # Multi-phase Clustering for Artworks Reconstruction 
- [Angelo Nazzaro](https://github.com/angelonazzaro), [Raffaele Aurucci Costante](https://github.com/raffaele-aurucci), [Angelo Palmieri](https://github.com/AngeloPalmieri)
+ [Angelo Nazzaro](https://github.com/angelonazzaro), [Raffaele Aurucci](https://github.com/raffaele-aurucci), [Angelo Palmieri](https://github.com/AngeloPalmieri)
 </div>
 
  

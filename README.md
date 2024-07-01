@@ -1,4 +1,15 @@
+
+<div align="center">
+
 # Multi-phase Clustering for Artworks Reconstruction 
+ [Angelo Nazzaro](https://github.com/angelonazzaro), [Raffaele Aurucci Costante](https://github.com/raffaele-aurucci), [Angelo Palmieri](https://github.com/AngeloPalmieri)
+</div>
+
+ 
+<p align="center">
+<a href="#"><img src="https://img.shields.io/github/contributors/angelonazzaro/artworks-reconstruction?style=for-the-badge" alt="Contributors"/></a>
+<img src="https://img.shields.io/github/last-commit/angelonazzaro/artworks-reconstruction?style=for-the-badge" alt="last commit">
+</p>
 
 # Table of Contents
 
@@ -39,6 +50,9 @@ We propose a multi-stage clustering-based approach for grouping fragments relati
 4. Refinement: The selected IN-Cluster undergoes a refinement phase aimed at removing irrelevant fragments and retaining only those relevant to the reference image.
 
 A comprehensive overview of our methodology is presented in the subsequent image. 
+
+![pipeline_new](https://github.com/angelonazzaro/artworks-reconstruction/assets/58223071/5050c3ee-75f9-4c1e-9cf4-aaeb5e5a9a39)
+
 
 # Installation Guide
 To install the necessary requirements for the project, please follow the steps below.
